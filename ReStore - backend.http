@@ -1,0 +1,6 @@
+@ReStore___backend_HostAddress = http://localhost:5034
+
+GET {{ReStore___backend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
