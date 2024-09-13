@@ -16,15 +16,22 @@
     <PackageReference Include="Firebase.DotNet.Auth" Version="1.0.3" />
     <PackageReference Include="FirebaseAdmin" Version="3.0.0" />
     <PackageReference Include="Google.Cloud.Firestore" Version="3.8.0" />
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6" />
+    <PackageReference Include="Google.Cloud.Storage.V1" Version="4.10.0" />
+    <PackageReference Include="ini-parser" Version="2.5.2" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.3" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Dtos\" />
     <Folder Include="Models\" />
-    <Folder Include="Services\" />
     <Folder Include="Repositories\" />
+    <Folder Include="Uploads\Documents\" />
+    <Folder Include="Uploads\Forecast\Sales\" />
+    <Folder Include="Uploads\Forecast\ProductSales\" />
+    <Folder Include="Uploads\Forecast\ProductDemand\" />
+    <Folder Include="Uploads\Model\ProductDemandTrain\" />
+    <Folder Include="Uploads\Model\SalesTrain\" />
+    <Folder Include="Uploads\Model\ProductSalesTrain\" />
   </ItemGroup>
 
 </Project>

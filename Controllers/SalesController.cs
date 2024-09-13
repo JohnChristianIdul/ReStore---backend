@@ -1,24 +1,23 @@
-﻿using Microsoft.AspNetCore.Http;
-using CsvHelper;
+﻿using CsvHelper;
+using Microsoft.AspNetCore.Mvc;
 using ReStore___backend.Services.Interfaces;
 using System.Globalization;
-using Microsoft.AspNetCore.Mvc;
 
 namespace ReStore___backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class DemandController : ControllerBase
+    public class SalesController : ControllerBase
     {
         private readonly IDataService _dataService;
 
-        public DemandController(IDataService dataService)
+        public SalesController(IDataService dataService)
         {
             _dataService = dataService;
         }
 
-        [HttpPost("upload/demand")]
-        public async Task<IActionResult> UploadDemandFile(IFormFile file, string username)
+        [HttpPost("upload/sales")]
+        public async Task<IActionResult> UploadSalesFile(IFormFile file, string username)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file provided." });
@@ -38,7 +37,7 @@ namespace ReStore___backend.Controllers
                     var records = csv.GetRecords<dynamic>().ToList();
 
                     // Call the service to process and upload the data
-                    await _dataService.ProcessAndUploadDataDemands(records, username);
+                    await _dataService.ProcessAndUploadDataSales(records, username);
 
                     return Ok(new { success = "Data processed and uploaded to Cloud Storage" });
                 }
