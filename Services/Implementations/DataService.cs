@@ -42,12 +42,12 @@ namespace ReStore___backend.Services.Implementations
 
             // Load credentials from file explicitly
             GoogleCredential credential;
-            using (var stream = new FileStream("/app/restore-db-98bee-fac0b3ad66ae.json", FileMode.Open, FileAccess.Read))
+            using (var stream = new FileStream("/app/restore-db-98bee-8760dc2c521d.json", FileMode.Open, FileAccess.Read))
             {
                 credential = GoogleCredential.FromStream(stream);
             }
 
-             _storageClient = StorageClient.Create(credential);
+            _storageClient = StorageClient.Create(credential);
             
             // Firebase Auth
             try

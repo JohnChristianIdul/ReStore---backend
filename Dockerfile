@@ -10,18 +10,18 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
 # Copy the project file and restore dependencies
-COPY ["ReStore - backend.csproj", "."]
-RUN dotnet restore "./ReStore - backend.csproj"
+COPY ["ReStore - backend.csproj", "ReStore - Backend/"]
+WORKDIR /src/ReStore - Backend
+RUN dotnet restore "ReStore - backend.csproj"
 
 # Copy the remaining files and build the application
 COPY . .
-WORKDIR "/src/Restore - Backend"
-RUN dotnet build "./ReStore - backend.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "ReStore - backend.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 # Publish the application to a folder
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./ReStore - backend.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "ReStore - backend.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 # Final stage: use the base image and copy the published output
 FROM base AS final
@@ -29,10 +29,10 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 
 # Copy the credentials file into the container
-COPY restore-db-98bee-c1a8fcedce1e.json /app/restore-db-98bee-c1a8fcedce1e.json
+COPY restore-db-98bee-8760dc2c521d.json /app/restore-db-98bee-8760dc2c521d.json
 
 # Set the environment variable for Google Application Credentials
-ENV GOOGLE_APPLICATION_CREDENTIALS="/app/restore-db-98bee-c1a8fcedce1e.json"
+ENV GOOGLE_APPLICATION_CREDENTIALS="/app/restore-db-98bee-8760dc2c521d.json"
 
 # Set the entry point for the container
 ENTRYPOINT ["dotnet", "ReStore - backend.dll"]
