@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using ReStore___backend.Dtos;
 using ReStore___backend.Services.Interfaces;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace ReStore___backend.Controllers
@@ -28,9 +29,9 @@ namespace ReStore___backend.Controllers
                 var result = await _dataService.SignUp(
                     signUpDto.Email,
                     signUpDto.Name,
-                    signUpDto.Password,
+                    signUpDto.Username,
                     signUpDto.PhoneNumber,
-                    signUpDto.Username
+                    signUpDto.Password                                 
                 );
 
                 if (result.StartsWith("Error"))
@@ -52,18 +53,22 @@ namespace ReStore___backend.Controllers
 
             try
             {
-                // Call service method for login
-                var token = await _dataService.Login(loginDto.Email, loginDto.Password);
+                // Call service method for login, which now returns a LoginResultDTO
+                var loginResult = await _dataService.Login(loginDto.Email, loginDto.Password);
 
-                if (token.StartsWith("Error"))
-                    return Unauthorized(new { error = token });
+                // Check if there was an error during login
+                if (loginResult.Token.StartsWith("Error"))
+                    return Unauthorized(new { error = loginResult.Token });
 
-                return Ok(new { token });
+                // Return the token and username from the LoginResultDTO
+                return Ok(new { token = loginResult.Token, username = loginResult.Username });
             }
             catch (Exception ex)
             {
+                // Return an internal server error with the exception message
                 return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
             }
         }
+
     }
 }

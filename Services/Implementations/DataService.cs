@@ -17,6 +17,9 @@ using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore.V1;
 using System.IO.Pipes;
 using System.Security.AccessControl;
+using System.Runtime.CompilerServices;
+using ReStore___backend.Dtos;
+using Firebase.Auth.Objects;
 
 namespace ReStore___backend.Services.Implementations
 {
@@ -70,7 +73,7 @@ namespace ReStore___backend.Services.Implementations
         }
 
         // Sign-up Implementation
-        public async Task<string> SignUp(string email, string name, string password, string phoneNumber, string username)
+        public async Task<string> SignUp(string email, string name, string username, string phoneNumber, string password)
         {
             try
             {
@@ -85,8 +88,8 @@ namespace ReStore___backend.Services.Implementations
                 {
                     { "email", email },
                     { "name", name },
-                    { "phone_number", phoneNumber },
                     { "username", username },
+                    { "phone_number", phoneNumber },                    
                     { "password", password }
                 };
 
@@ -103,20 +106,49 @@ namespace ReStore___backend.Services.Implementations
         }
 
         // Login Implementation
-        public async Task<string> Login(string email, string password)
+        public async Task<LoginResultDTO> Login(string email, string password)
         {
             try
             {
                 // Authenticate user with Firebase Auth
                 var auth = await _authProvider.SignInWithEmailAndPasswordAsync(email, password);
 
-                return $"User logged in successfully. Token: {auth.FirebaseToken}";
+                // Retrieve the authenticated user's ID
+                var userId = auth.User.LocalId;
+
+                // Fetch user data from Firestore or your chosen database
+                var userDoc = await _firestoreDb.Collection("Users").Document(userId).GetSnapshotAsync();
+
+                if (!userDoc.Exists)
+                {
+                    return new LoginResultDTO
+                    {
+                        Token = auth.FirebaseToken,
+                        Username = null // Or handle as necessary
+                    };
+                }
+
+                // Assuming the username is stored in a field named "username"
+                var username = userDoc.GetValue<string>("username") ?? auth.User.Email;
+
+                // Return a DTO with the token and username
+                return new LoginResultDTO
+                {
+                    Token = auth.FirebaseToken,
+                    Username = username
+                };
             }
             catch (Exception ex)
             {
-                return $"Error during login: {ex.Message}";
+                // Handle error and return a message
+                return new LoginResultDTO
+                {
+                    Token = $"Error during login: {ex.Message}",
+                    Username = null
+                };
             }
         }
+
 
         // Process data, save to CSV, and upload to Cloud Storage
         public async Task ProcessAndUploadDataDemands(IEnumerable<dynamic> records, string username)
@@ -188,27 +220,60 @@ namespace ReStore___backend.Services.Implementations
 
                 // Upload the CSV file to Cloud Storage
                 await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
+
+                // Pass the memory stream to GenerateSalesInsight
+                memoryStream.Position = 0;
+                await SalesInsight(memoryStream, username);
             }
+            
         }
 
-        ////Extract year from csv file for folder name
-        //private string ExtractYear(string dateString)
-        //{
-        //    DateTime date;
-        //    string format_1 = "yyyy-MM";
-        //    string format_2 = "yyyy-MM-dd";
-        //    string[] formats = { format_1, format_2 };
+        // Generate Sales Insight using H2O.ai
+        public async Task<string> SalesInsight(MemoryStream salesData, string username)
+        {
+            return await H2OPRedictionApi(salesData, username);
 
-        //    if (DateTime.TryParseExact(dateString, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
-        //    {
-        //        return dateString;
-        //    }
-        //    else
-        //    {
-        //        throw new FormatException($"Date String '{dateString}' is not in a recognized format. Format must be yyyy-MM or yyyy-MM-DD.");
-        //    }
-        //}
+        }
 
+        // Call the Model
+        public async Task<string> H2OPRedictionApi(MemoryStream salesData, string username)
+        {
+            // Set up HttpClient to call API
+            using (var client = new HttpClient())
+            {
+                // Define the URL of the H2O prediction API
+                string apiUrl = "http://127.0.0.1:5000/generate/insightsgit merge ";
+
+                // Create a temporary file to save in desired file type
+                string tempFileName = Path.GetTempFileName();
+                string fileExtension = "csv";
+                tempFileName = Path.ChangeExtension(tempFileName, fileExtension);
+
+                // Save the MemoryStream to the temporary file
+                using (var fileStream = new FileStream(tempFileName, FileMode.Create, FileAccess.Write))
+                {
+                    salesData.Position = 0;
+                    await salesData.CopyToAsync(fileStream);
+                }
+
+                // Create the HTTP request
+                var form = new MultipartFormDataContent();
+                form.Add(new StreamContent(new FileStream(tempFileName, FileMode.Open, FileAccess.Read)), "file", $"sales_data{fileExtension}");
+                form.Add(new StringContent(username), "username");
+
+                // Make a POST request to the H2O API
+                HttpResponseMessage response = await client.PostAsync(apiUrl, form);
+
+                // Ensure the response is successful
+                response.EnsureSuccessStatusCode();
+                string insights = await response.Content.ReadAsStringAsync();
+
+                // Clean up the temporary file
+                System.IO.File.Delete(tempFileName);
+
+                return insights;
+            }
+        }
         // Method to create a folder in Cloud Storage
         private async Task CreateFolderInCloudStorage(string folderPath)
         {
@@ -223,7 +288,7 @@ namespace ReStore___backend.Services.Implementations
         Task<string> IDataService.PredictDemandEndpoint()
         {
             throw new NotImplementedException();
-        }
+        } 
 
         Task<string> IDataService.TrainDemandModelEndpoint()
         {
