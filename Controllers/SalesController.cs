@@ -17,10 +17,13 @@ namespace ReStore___backend.Controllers
         }
 
         [HttpPost("upload/sales")]
-        public async Task<IActionResult> UploadSalesFile(IFormFile file, string username)
+        public async Task<IActionResult> UploadSalesFile(IFormFile file, [FromForm] string username)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file provided." });
+
+            if (string.IsNullOrEmpty(username))
+                return BadRequest(new { error = "Username is required." });
 
             try
             {
@@ -37,6 +40,7 @@ namespace ReStore___backend.Controllers
                     var records = csv.GetRecords<dynamic>().ToList();
 
                     // Call the service to process and upload the data
+                    Console.WriteLine($"{username}");
                     await _dataService.ProcessAndUploadDataSales(records, username);
 
                     return Ok(new { success = "Data processed and uploaded to Cloud Storage" });

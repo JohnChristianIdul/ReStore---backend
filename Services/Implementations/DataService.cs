@@ -20,6 +20,9 @@ using System.Security.AccessControl;
 using System.Runtime.CompilerServices;
 using ReStore___backend.Dtos;
 using Firebase.Auth.Objects;
+using Google.Cloud.AIPlatform.V1;
+using Newtonsoft.Json;
+using System.Net.Http.Headers;
 
 namespace ReStore___backend.Services.Implementations
 {
@@ -28,10 +31,19 @@ namespace ReStore___backend.Services.Implementations
         private readonly FirestoreDb _firestoreDb;
         private readonly FirebaseAuthProvider _authProvider;
         private readonly StorageClient _storageClient;
+        private readonly HttpClient _httpClient;
+        private readonly string _apiUrl;
         private readonly string _bucketName;
+        private readonly string _projectId;
+        private readonly string _location;
+        private readonly string _endpointId;
 
         public DataService()
         {
+            // Configure url and http client
+            _httpClient = new HttpClient();
+            _apiUrl = "https://restore-ai-model.onrender.com/generate-insights";
+
             // Load configuration from INI file
             var parser = new FileIniDataParser();
             IniData data = parser.ReadFile("credentials.ini");
@@ -49,9 +61,8 @@ namespace ReStore___backend.Services.Implementations
             {
                 credential = GoogleCredential.FromStream(stream);
             }
-
             _storageClient = StorageClient.Create(credential);
-            
+
             // Firebase Auth
             try
             {
@@ -89,7 +100,7 @@ namespace ReStore___backend.Services.Implementations
                     { "email", email },
                     { "name", name },
                     { "username", username },
-                    { "phone_number", phoneNumber },                    
+                    { "phone_number", phoneNumber },
                     { "password", password }
                 };
 
@@ -124,7 +135,7 @@ namespace ReStore___backend.Services.Implementations
                     return new LoginResultDTO
                     {
                         Token = auth.FirebaseToken,
-                        Username = null // Or handle as necessary
+                        Username = null
                     };
                 }
 
@@ -148,7 +159,6 @@ namespace ReStore___backend.Services.Implementations
                 };
             }
         }
-
 
         // Process data, save to CSV, and upload to Cloud Storage
         public async Task ProcessAndUploadDataDemands(IEnumerable<dynamic> records, string username)
@@ -221,59 +231,50 @@ namespace ReStore___backend.Services.Implementations
                 // Upload the CSV file to Cloud Storage
                 await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
 
-                // Pass the memory stream to GenerateSalesInsight
+                // Pass the memory stream to SalesInsight
                 memoryStream.Position = 0;
                 await SalesInsight(memoryStream, username);
             }
-            
         }
 
-        // Generate Sales Insight using H2O.ai
+        // Generate Sales Insight using Vertex AI
         public async Task<string> SalesInsight(MemoryStream salesData, string username)
         {
-            return await H2OPRedictionApi(salesData, username);
-
-        }
-
-        // Call the Model
-        public async Task<string> H2OPRedictionApi(MemoryStream salesData, string username)
-        {
-            // Set up HttpClient to call API
-            using (var client = new HttpClient())
+            // Prepare the content for the POST request
+            using (var form = new MultipartFormDataContent())
             {
-                // Define the URL of the H2O prediction API
-                string apiUrl = "http://127.0.0.1:5000/generate/insightsgit merge ";
+                // Read the sales data from the MemoryStream and prepare the file content
+                salesData.Position = 0; // Reset the stream position to the beginning
+                var fileContent = new StreamContent(salesData);
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+                form.Add(fileContent, "file", "sales_data.csv"); // Name it appropriately
 
-                // Create a temporary file to save in desired file type
-                string tempFileName = Path.GetTempFileName();
-                string fileExtension = "csv";
-                tempFileName = Path.ChangeExtension(tempFileName, fileExtension);
+                // Use the existing prompt from the API
+                var prompt = @"Explain the sales data fluctuations. Provide the Seasonal Fluctuation, 
+                           Peak Sales Period, Low Sales Period, Abrupt Fluctuations, and Potential External Factors 
+                           focusing on Philippine Market specifically on the Weather and climate as one, and economic 
+                           condition.";
+                form.Add(new StringContent(prompt), "prompt");
 
-                // Save the MemoryStream to the temporary file
-                using (var fileStream = new FileStream(tempFileName, FileMode.Create, FileAccess.Write))
+                // Send the request to the API
+                var response = await _httpClient.PostAsync(_apiUrl, form);
+
+                // Check if the response is successful
+                if (response.IsSuccessStatusCode)
                 {
-                    salesData.Position = 0;
-                    await salesData.CopyToAsync(fileStream);
+                    // Read the response content as a string
+                    var result = await response.Content.ReadAsStringAsync();
+                    return result; // Return the generated insights
                 }
-
-                // Create the HTTP request
-                var form = new MultipartFormDataContent();
-                form.Add(new StreamContent(new FileStream(tempFileName, FileMode.Open, FileAccess.Read)), "file", $"sales_data{fileExtension}");
-                form.Add(new StringContent(username), "username");
-
-                // Make a POST request to the H2O API
-                HttpResponseMessage response = await client.PostAsync(apiUrl, form);
-
-                // Ensure the response is successful
-                response.EnsureSuccessStatusCode();
-                string insights = await response.Content.ReadAsStringAsync();
-
-                // Clean up the temporary file
-                System.IO.File.Delete(tempFileName);
-
-                return insights;
+                else
+                {
+                    // Handle error response
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Error calling API: {response.StatusCode} - {errorContent}");
+                }
             }
         }
+
         // Method to create a folder in Cloud Storage
         private async Task CreateFolderInCloudStorage(string folderPath)
         {
@@ -288,7 +289,7 @@ namespace ReStore___backend.Services.Implementations
         Task<string> IDataService.PredictDemandEndpoint()
         {
             throw new NotImplementedException();
-        } 
+        }
 
         Task<string> IDataService.TrainDemandModelEndpoint()
         {

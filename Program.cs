@@ -8,10 +8,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowSpecificOrigin",
-        builder => builder.WithOrigins("https://localhost:32769/signup")
-        .AllowAnyMethod()
-        .AllowAnyHeader());
+    options.AddPolicy("AllowSpecificOrigin", corsBuilder => // changed var name to corsBuilder
+    {
+        corsBuilder.WithOrigins("http://localhost:5173")  //changed port for frontend
+                   .AllowAnyMethod()
+                   .AllowAnyHeader()
+                   .AllowCredentials();
+    });
 });
 
 builder.Services.AddControllers();
@@ -19,7 +22,7 @@ builder.Services.AddScoped<IDataService, DataService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen( c =>
+builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1",
         new OpenApiInfo
@@ -38,12 +41,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+//app.UseHttpsRedirection(); //comment out for CORS preflight error
 
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
+app.UseRouting(); // added UseRouting
 
 app.UseCors("AllowSpecificOrigin");
+
+app.UseAuthorization();
 
 app.MapControllers();
 

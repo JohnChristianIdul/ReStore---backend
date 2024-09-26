@@ -4,6 +4,8 @@ using System.Data;
 using Microsoft.AspNetCore.Mvc;
 using ReStore___backend.Services.Interfaces;
 using System.Globalization;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace ReStore___backend.Controllers
 {
@@ -35,9 +37,7 @@ namespace ReStore___backend.Controllers
             using (var memoryStream = new MemoryStream())
             {
                 await file.CopyToAsync(memoryStream);
-
-                // Reset the stream position to the beginning before processing
-                memoryStream.Position = 0;
+                memoryStream.Position = 0; // Reset the stream position to the beginning before processing
 
                 if (extension == ".csv")
                 {
@@ -80,13 +80,10 @@ namespace ReStore___backend.Controllers
 
             try
             {
-                // Initialize Excel reader
                 using (var reader = ExcelReaderFactory.CreateReader(excelStream))
                 {
-                    // Read the first sheet
                     if (reader.Read())
                     {
-                        // Create a DataTable to hold the data
                         var dataTable = new DataTable();
 
                         // Add columns to DataTable
