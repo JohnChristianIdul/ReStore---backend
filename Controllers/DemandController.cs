@@ -52,5 +52,19 @@ namespace ReStore___backend.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
             }
         }
+
+        [HttpGet("demand/{username}")]
+        public async Task<IActionResult> GetDemandData(string username)
+        {
+            try
+            {
+                string demandDataJson = await _dataService.GetDemandDataFromStorageByUsername(username);
+                return Ok(demandDataJson);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
+            }
+        }
     }
 }

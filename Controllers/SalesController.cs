@@ -51,5 +51,24 @@ namespace ReStore___backend.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
             }
         }
+
+        // GET method to retrieve sales data for a specific user
+        [HttpGet("sales/{username}")]
+        public async Task<IActionResult> GetSalesData(string username)
+        {
+            if (string.IsNullOrEmpty(username))
+                return BadRequest(new { error = "Username is required." });
+
+            try
+            {
+                // Call the service to get sales data
+                var salesDataJson = await _dataService.GetSalesDataFromStorageByUsername(username);
+                return Ok(new { data = salesDataJson });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
+            }
+        }
     }
 }

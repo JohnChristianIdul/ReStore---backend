@@ -23,6 +23,9 @@ using Firebase.Auth.Objects;
 using Google.Cloud.AIPlatform.V1;
 using Newtonsoft.Json;
 using System.Net.Http.Headers;
+using Google;
+using System.Text;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ReStore___backend.Services.Implementations
 {
@@ -171,9 +174,6 @@ namespace ReStore___backend.Services.Implementations
             // Create new folder in Cloud Storage
             var folderPath = $"upload_demands/{username}-upload-demands/";
 
-            // Ensure folder exists by uploading an empty file to it
-            await CreateFolderInCloudStorage(folderPath);
-
             foreach (var group in groupedRecords)
             {
                 string productId = group.Key;
@@ -195,8 +195,54 @@ namespace ReStore___backend.Services.Implementations
 
                     // Upload the CSV file to Cloud Storage
                     await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
+
                 }
             }
+        }
+
+        // Fetch the Demand Data from firestore
+        public async Task<string> GetDemandDataFromStorageByUsername(string username)
+        {
+            var demandData = new List<dynamic>();
+
+            // Define the path to the storage bucket and directory
+            string folderPath = $"upload_demands/{username}-upload-demands/";
+
+            // List objects in the specified folder
+            var storageObjects = _storageClient.ListObjects(_bucketName, folderPath);
+            foreach (var storageObject in storageObjects)
+            {
+                // Only process CSV files
+                if (storageObject.Name.EndsWith(".csv"))
+                {
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        // Download the file to memory
+                        await _storageClient.DownloadObjectAsync(_bucketName, storageObject.Name, memoryStream);
+                        memoryStream.Position = 0; // Reset the stream position for reading
+
+                        using (var reader = new StreamReader(memoryStream))
+                        using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                        {
+                            var records = csv.GetRecords<dynamic>().ToList();
+                            demandData.AddRange(records); // Add records to demandData list
+                        }
+                    }
+                }
+            }
+
+            // Group the data by ProductID
+            var groupedData = demandData
+                .GroupBy(record => record.ProductID) // Change "ProductID" to your desired grouping field
+                .Select(group => new
+                {
+                    ProductID = group.Key,
+                    Records = group.ToList()
+                });
+
+            // Convert the grouped data to JSON
+            string jsonData = JsonConvert.SerializeObject(groupedData, Formatting.Indented);
+            return jsonData;
         }
 
         // Process data, save to CSV, and upload to Cloud Storage for Sales
@@ -208,9 +254,6 @@ namespace ReStore___backend.Services.Implementations
             // Create a filename
             string fileName = $"sales_{timestamp}.csv";
             string folderPath = $"upload_sales/{username}-upload-sales/";
-
-            // Ensure folder exists by uploading an empty file to it
-            await CreateFolderInCloudStorage(folderPath);
 
             // Save the entire records to a MemoryStream
             using (var memoryStream = new MemoryStream())
@@ -233,9 +276,138 @@ namespace ReStore___backend.Services.Implementations
 
                 // Pass the memory stream to SalesInsight
                 memoryStream.Position = 0;
-                await SalesInsight(memoryStream, username);
+                //await SalesInsight(memoryStream, username);
             }
         }
+
+        // Process Sales Data to return as Json
+        public async Task<string> GetSalesDataFromStorageByUsername(string username)
+        {
+            var salesData = new List<SaleRecordDTO>();
+
+            // Define the path to the storage bucket and directory without the trailing slash
+            string folderPath = $"upload_sales/{username}-upload-sales";
+
+            // Get the list of objects in the specified folder
+            var files = _storageClient.ListObjects(_bucketName, folderPath).ToList();
+
+            // Filter for CSV files
+            var csvFiles = files.Where(file => file.Name.EndsWith(".csv")).ToList();
+
+            // Ensure there are CSV files
+            if (!csvFiles.Any())
+            {
+                throw new Exception("No CSV files found in the specified folder.");
+            }
+
+            // Get the latest sales file based on the count of CSV files
+            var latestFile = csvFiles.Count == 1 ? csvFiles[0] : csvFiles.Last();
+
+            Console.WriteLine($"File name: {latestFile.Name}");
+
+            try
+            {
+                using (var memoryStream = new MemoryStream())
+                {
+                    // Download the file to memory
+                    await _storageClient.DownloadObjectAsync(_bucketName, latestFile.Name, memoryStream);
+                    memoryStream.Position = 0;
+
+                    // Convert the file content to string (assuming it's in a supported format, like CSV)
+                    using (var reader = new StreamReader(memoryStream))
+                    {
+                        string content = await reader.ReadToEndAsync();
+
+                        // Split the CSV content into lines
+                        var lines = content.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+                        // Ensure we have lines to process
+                        if (lines.Length > 1)
+                        {
+                            // Get the header row
+                            var header = lines[0].Split(',');
+
+                            // Check if the header at index 1 is not "Sales" and rename it if necessary
+                            if (header.Length > 1 && header[1].Trim() != "Sales")
+                            {
+                                header[1] = "Sales"; // Rename the second column to 'Sales'
+                            }
+                            else if (header.Length < 2)
+                            {
+                                throw new Exception("The CSV file does not have enough columns.");
+                            }
+
+                            // Skip the header and parse the data starting from the second line
+                            for (int i = 1; i < lines.Length; i++)
+                            {
+                                var columns = lines[i].Split(',');
+
+                                // Check if the row has the correct number of columns
+                                if (columns.Length >= 2 && !string.IsNullOrWhiteSpace(columns[0]))
+                                {
+                                    try
+                                    {
+                                        // Parse the year and month from the first column
+                                        var dateParts = columns[0].Split('-');
+                                        if (dateParts.Length != 2) continue;
+
+                                        int year = int.Parse(dateParts[0]);
+                                        int month = int.Parse(dateParts[1]);
+
+                                        // Parse the sales amount from the second column (now ensured to be "Sales")
+                                        decimal sales = decimal.Parse(columns[1]);
+
+                                        // Create a SaleRecord object and add it to the list
+                                        salesData.Add(new SaleRecordDTO
+                                        {
+                                            Year = year,
+                                            Month = month,
+                                            Sales = sales
+                                        });
+                                    }
+                                    catch (FormatException ex)
+                                    {
+                                        Console.WriteLine($"Skipping invalid line: {lines[i]} - Error: {ex.Message}");
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            throw new Exception("No valid data rows found in the CSV file.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log exception details
+                Console.WriteLine($"Error processing file: {ex.Message}");
+            }
+
+            // Create the desired JSON structure
+            var result = salesData
+                .GroupBy(sale => sale.Year)
+                .Select(g => new
+                {
+                    Year = g.Key,
+                    SalesData = g.Select(s => new
+                    {
+                        Month = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(s.Month), // Convert month number to name
+                        Sales = s.Sales
+                    }).ToList()
+                }).ToList();
+
+            // Create a final object to return as JSON
+            var finalResult = new { data = result };
+
+            // Serialize to JSON without unwanted characters or newlines
+            string jsonData = JsonConvert.SerializeObject(finalResult, Formatting.None);
+
+            // Return the clean JSON string
+            return jsonData.Replace("\\n", ""); // Remove any unwanted newlines from the JSON string
+        }
+
 
         // Generate Sales Insight using Vertex AI
         public async Task<string> SalesInsight(MemoryStream salesData, string username)
@@ -275,17 +447,6 @@ namespace ReStore___backend.Services.Implementations
             }
         }
 
-        // Method to create a folder in Cloud Storage
-        private async Task CreateFolderInCloudStorage(string folderPath)
-        {
-            // Creating a folder in Cloud Storage is done by uploading an empty object with a trailing slash
-            var emptyObjectName = $"{folderPath}/";
-            using (var memoryStream = new MemoryStream())
-            {
-                await _storageClient.UploadObjectAsync(_bucketName, emptyObjectName, null, memoryStream);
-            }
-        }
-
         Task<string> IDataService.PredictDemandEndpoint()
         {
             throw new NotImplementedException();
@@ -295,5 +456,6 @@ namespace ReStore___backend.Services.Implementations
         {
             throw new NotImplementedException();
         }
+
     }
 }

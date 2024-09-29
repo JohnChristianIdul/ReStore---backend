@@ -1,11 +1,15 @@
-﻿using ReStore___backend.Dtos;
+﻿using Microsoft.AspNetCore.Mvc;
+using ReStore___backend.Dtos;
+using System.Runtime.CompilerServices;
 
 namespace ReStore___backend.Services.Interfaces
 {
     public interface IDataService
     {
-        Task ProcessAndUploadDataDemands(IEnumerable<dynamic> records, string username); 
+        Task ProcessAndUploadDataDemands(IEnumerable<dynamic> records, string username);
+        Task<string> GetDemandDataFromStorageByUsername(string username);
         Task ProcessAndUploadDataSales(IEnumerable<dynamic> records, string username);
+        Task<string> GetSalesDataFromStorageByUsername(string username);
         Task<string> SalesInsight(MemoryStream salesData, string username);
         Task<string> TrainDemandModelEndpoint();
         Task<string> PredictDemandEndpoint();
