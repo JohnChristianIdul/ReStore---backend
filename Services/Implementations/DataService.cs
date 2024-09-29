@@ -190,17 +190,27 @@ namespace ReStore___backend.Services.Implementations
                         csv.WriteRecords(group);
                     }
 
+                    // Reset the position of the memory stream to the beginning
+                    memoryStream.Position = 0;
+
                     // Upload the CSV file to Cloud Storage
-                    using (var memoryStream = new MemoryStream(File.ReadAllBytes(tempFilePath)))
+                    await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
+
+                    memoryStream.Position = 0;
+                    // Now, create a temporary file from the MemoryStream to pass to TrainDemandModelEndpoint
+                    string tempFilePath = Path.Combine(Path.GetTempPath(), fileName);
+
+                    using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write))
                     {
-                        await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
+                        memoryStream.Position = 0;  // Reset stream position
+                        await memoryStream.CopyToAsync(fileStream);
                     }
 
-                    // Train the demand model using the CSV file
+                    // Call TrainDemandModelEndpoint with the file and username
                     var csvFile = new FileInfo(tempFilePath);
                     await TrainDemandModelEndpoint(csvFile, username);
 
-                    // Optionally delete the temporary file after processing
+                    // Optionally, delete the temp file after use
                     if (File.Exists(tempFilePath))
                     {
                         File.Delete(tempFilePath);
