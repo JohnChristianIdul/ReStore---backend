@@ -196,6 +196,8 @@ namespace ReStore___backend.Services.Implementations
                     // Upload the CSV file to Cloud Storage
                     await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
 
+                    memoryStream.Position = 0;
+                    //await TrainDemandModelEndpoint(memoryStream, username);
                 }
             }
         }

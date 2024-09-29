@@ -12,7 +12,7 @@ namespace ReStore___backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class InsightController : ControllerBase
+    public class TrainDemandController : ControllerBase
     {
         private readonly IDataService _dataService;
 
