@@ -208,6 +208,7 @@ namespace ReStore___backend.Services.Implementations
 
                     // Call TrainDemandModelEndpoint with the file and username
                     var csvFile = new FileInfo(tempFilePath);
+                    Console.WriteLine("here");
                     await TrainDemandModelEndpoint(csvFile, username);
 
                     // Optionally, delete the temp file after use
@@ -437,7 +438,7 @@ namespace ReStore___backend.Services.Implementations
                 var formData = new MultipartFormDataContent();
                 formData.Add(new StreamContent(salesData), "file", "sales_data.csv");
 
-                string insightUrl = Environment.GetEnvironmentVariable("API_INSIGHT_URL") + "/generate-insights";
+                string insightUrl = Environment.GetEnvironmentVariable("API_URL") + "/generate-insights";
                 var response = await _httpClient.PostAsync(insightUrl, formData);
                 insights = await response.Content.ReadAsStringAsync();
 
