@@ -36,9 +36,9 @@ namespace ReStore___backend.Services.Implementations
         private readonly FirebaseAuthProvider _authProvider;
         private readonly StorageClient _storageClient;
         private readonly HttpClient _httpClient;
-        private readonly string _apiUrl;
         private readonly string _bucketName;
         private readonly string _projectId;
+        private readonly string _apiUrl;
         private readonly string _location;
         private readonly string _endpointId;
 
@@ -46,8 +46,7 @@ namespace ReStore___backend.Services.Implementations
         {
             // Configure url and http client
             _httpClient = new HttpClient();
-            _apiUrl = "https://https://restore-dqh8c7h5cwe5huae.southeastasia-01.azurewebsites.net/generate-insights";
-
+            
             // Load configuration from INI file
             var parser = new FileIniDataParser();
             IniData data = parser.ReadFile("credentials.ini");
@@ -414,14 +413,13 @@ namespace ReStore___backend.Services.Implementations
         {
             // Call your API to get the insights
             string insights;
-            using (var client = new HttpClient())
+            using (_httpClient)
             {
                 var formData = new MultipartFormDataContent();
                 formData.Add(new StreamContent(salesData), "file", "sales_data.csv");
-                formData.Add(new StringContent("Provide a textual sales insight including the sales trend and sales fluctuations in the Philippine market and how it might affect the sales."), "prompt");
 
-                // Replace with your actual API URL
-                var response = await client.PostAsync(_apiUrl + "/generate-insights", formData);
+                string insightUrl = Environment.GetEnvironmentVariable("API_INSIGHT_URL") + "/generate-insights";
+                var response = await _httpClient.PostAsync(insightUrl, formData);
                 insights = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
@@ -430,20 +428,37 @@ namespace ReStore___backend.Services.Implementations
                 }
             }
 
+            // Extract the insights text from the JSON response
+            var jsonObject = JsonConvert.DeserializeObject<Dictionary<string, string>>(insights);
+            if (!jsonObject.ContainsKey("insights"))
+            {
+                throw new Exception("Insights not found in the API response.");
+            }
+
+            string insightsText = jsonObject["insights"];
+
+            // Format the insights text
+            insightsText = insightsText
+                .Replace("\n", " ") // Replace new lines with space
+                .Replace("\r", " ") // Replace carriage returns with space
+                .Replace("\"", "")  // Remove any quotes
+                .Replace(",", " ")   // Replace commas with space
+                .Replace("  ", " "); // Replace double spaces with a single space
+
+            Console.WriteLine(insightsText); // Log the formatted insights
+
             // Convert insights to CSV format
             var csvLines = new List<string>
             {
                 "InsightData" // Header
             };
 
-            // Ensure the insights text is properly formatted for CSV
-            // Optionally escape quotes and handle line breaks
-            var formattedInsights = insights.Replace("\"", "\"\"")  // Escape quotes
-                                             .Replace("\n", " "); // Replace new lines with space (or use another delimiter)
-
-            csvLines.Add(formattedInsights); // Add insights as the body of the CSV
+            // Add the cleaned insights as the body of the CSV
+            csvLines.Add(insightsText);
 
             string csvContent = string.Join("\n", csvLines);
+
+            Console.WriteLine(csvContent);
 
             // Upload the CSV to Firebase Storage
             var storagePath = $"Insight/{username}-sales-insight/sales_insights.csv"; // Define your storage path
@@ -452,16 +467,18 @@ namespace ReStore___backend.Services.Implementations
                 await _storageClient.UploadObjectAsync(_bucketName, storagePath, "text/csv", uploadStream);
             }
 
-            return insights;
+            return insightsText; // Optionally return the cleaned insights text
         }
 
         // Get Sales Insight value from Cloud Storage
         public async Task<string> GetSalesInsightByUsername(string username)
         {
             var insightData = new List<InsightDTO>();
+            Console.WriteLine($"Username: {username}");
 
             // Define the path to the storage bucket and directory
-            string folderPath = $"insight/{username}-sales-insight/";
+            string folderPath = $"Insight/{username}-sales-insight/";
+            Console.WriteLine($"Folder path: {folderPath}");
 
             // Get the list of objects in the specified folder
             var files = _storageClient.ListObjects(_bucketName, folderPath).ToList();
@@ -476,7 +493,7 @@ namespace ReStore___backend.Services.Implementations
             }
 
             // Log the list of files
-            Console.WriteLine("Files in the directory:");
+            Console.WriteLine("Files in the directory: ");
             foreach (var file in files)
             {
                 Console.WriteLine($"- {file.Name}");
