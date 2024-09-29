@@ -26,6 +26,7 @@ using System.Net.Http.Headers;
 using Google;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
+using CsvHelper.Configuration;
 
 namespace ReStore___backend.Services.Implementations
 {
@@ -45,7 +46,7 @@ namespace ReStore___backend.Services.Implementations
         {
             // Configure url and http client
             _httpClient = new HttpClient();
-            _apiUrl = "https://restore-ai-model.onrender.com/generate-insights";
+            _apiUrl = "https://https://restore-dqh8c7h5cwe5huae.southeastasia-01.azurewebsites.net/generate-insights";
 
             // Load configuration from INI file
             var parser = new FileIniDataParser();
@@ -276,7 +277,7 @@ namespace ReStore___backend.Services.Implementations
 
                 // Pass the memory stream to SalesInsight
                 memoryStream.Position = 0;
-                //await SalesInsight(memoryStream, username);
+                await SalesInsight(memoryStream, username);
             }
         }
 
@@ -408,43 +409,101 @@ namespace ReStore___backend.Services.Implementations
             return jsonData.Replace("\\n", ""); // Remove any unwanted newlines from the JSON string
         }
 
-
-        // Generate Sales Insight using Vertex AI
+        // Call Model for Insight
         public async Task<string> SalesInsight(MemoryStream salesData, string username)
         {
-            // Prepare the content for the POST request
-            using (var form = new MultipartFormDataContent())
+            // Call your API to get the insights
+            string insights;
+            using (var client = new HttpClient())
             {
-                // Read the sales data from the MemoryStream and prepare the file content
-                salesData.Position = 0; // Reset the stream position to the beginning
-                var fileContent = new StreamContent(salesData);
-                fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
-                form.Add(fileContent, "file", "sales_data.csv"); // Name it appropriately
+                var formData = new MultipartFormDataContent();
+                formData.Add(new StreamContent(salesData), "file", "sales_data.csv");
+                formData.Add(new StringContent("Provide a textual sales insight including the sales trend and sales fluctuations in the Philippine market and how it might affect the sales."), "prompt");
 
-                // Use the existing prompt from the API
-                var prompt = @"Explain the sales data fluctuations. Provide the Seasonal Fluctuation, 
-                           Peak Sales Period, Low Sales Period, Abrupt Fluctuations, and Potential External Factors 
-                           focusing on Philippine Market specifically on the Weather and climate as one, and economic 
-                           condition.";
-                form.Add(new StringContent(prompt), "prompt");
+                // Replace with your actual API URL
+                var response = await client.PostAsync(_apiUrl + "/generate-insights", formData);
+                insights = await response.Content.ReadAsStringAsync();
 
-                // Send the request to the API
-                var response = await _httpClient.PostAsync(_apiUrl, form);
-
-                // Check if the response is successful
-                if (response.IsSuccessStatusCode)
+                if (!response.IsSuccessStatusCode)
                 {
-                    // Read the response content as a string
-                    var result = await response.Content.ReadAsStringAsync();
-                    return result; // Return the generated insights
-                }
-                else
-                {
-                    // Handle error response
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    throw new Exception($"Error calling API: {response.StatusCode} - {errorContent}");
+                    throw new Exception($"API call failed: {insights}");
                 }
             }
+
+            // Convert insights to CSV format
+            var csvLines = new List<string>
+            {
+                "InsightData" // Header
+            };
+
+            // Ensure the insights text is properly formatted for CSV
+            // Optionally escape quotes and handle line breaks
+            var formattedInsights = insights.Replace("\"", "\"\"")  // Escape quotes
+                                             .Replace("\n", " "); // Replace new lines with space (or use another delimiter)
+
+            csvLines.Add(formattedInsights); // Add insights as the body of the CSV
+
+            string csvContent = string.Join("\n", csvLines);
+
+            // Upload the CSV to Firebase Storage
+            var storagePath = $"Insight/{username}-sales-insight/sales_insights.csv"; // Define your storage path
+            using (var uploadStream = new MemoryStream(Encoding.UTF8.GetBytes(csvContent)))
+            {
+                await _storageClient.UploadObjectAsync(_bucketName, storagePath, "text/csv", uploadStream);
+            }
+
+            return insights;
+        }
+
+        // Get Sales Insight value from Cloud Storage
+        public async Task<string> GetSalesInsightByUsername(string username)
+        {
+            var insightData = new List<InsightDTO>();
+
+            // Define the path to the storage bucket and directory
+            string folderPath = $"insight/{username}-sales-insight/";
+
+            // Get the list of objects in the specified folder
+            var files = _storageClient.ListObjects(_bucketName, folderPath).ToList();
+
+            // Filter for CSV files
+            var csvFiles = files.Where(file => file.Name.EndsWith(".csv")).ToList();
+
+            // Ensure there are CSV files
+            if (!csvFiles.Any())
+            {
+                throw new Exception("No CSV files found in the specified folder.");
+            }
+
+            // Log the list of files
+            Console.WriteLine("Files in the directory:");
+            foreach (var file in files)
+            {
+                Console.WriteLine($"- {file.Name}");
+            }
+
+            // Get the latest sales insight file based on the count of CSV files
+            var latestFile = csvFiles[0];
+
+            Console.WriteLine($"File name: {latestFile.Name}");
+
+            using (var memoryStream = new MemoryStream())
+            {
+                // Download the latest file from cloud storage
+                await _storageClient.DownloadObjectAsync(_bucketName, latestFile.Name, memoryStream);
+                memoryStream.Position = 0; // Reset stream position
+
+                // Convert CSV data to JSON
+                using (var reader = new StreamReader(memoryStream))
+                using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                {
+                    var records = csv.GetRecords<InsightDTO>().ToList();
+                    insightData.AddRange(records);
+                }
+        }
+
+            // Convert the list to JSON and return
+            return JsonConvert.SerializeObject(insightData);
         }
 
         Task<string> IDataService.PredictDemandEndpoint()
