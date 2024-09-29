@@ -12,7 +12,7 @@ namespace ReStore___backend.Services.Interfaces
         Task<string> GetSalesDataFromStorageByUsername(string username);
         Task<string> SalesInsight(MemoryStream salesData, string username);
         Task<string> GetSalesInsightByUsername(string username);
-        Task<string> TrainDemandModelEndpoint();
+        Task<string> TrainDemandModelEndpoint(FileInfo csvFile, string username);
         Task<string> PredictDemandEndpoint();
         Task<string> SignUp(string email, string name, string username, string phoneNumber, string password);
         Task<LoginResultDTO> Login(string email, string password);

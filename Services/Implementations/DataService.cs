@@ -17,9 +17,6 @@ using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore.V1;
 using System.IO.Pipes;
 using System.Security.AccessControl;
-<<<<<<< HEAD
-using Newtonsoft.Json;
-=======
 using System.Runtime.CompilerServices;
 using ReStore___backend.Dtos;
 using Firebase.Auth.Objects;
@@ -30,7 +27,6 @@ using Google;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using CsvHelper.Configuration;
->>>>>>> d76db1ec61eab0357da55bf28babeb3173b58992
 
 namespace ReStore___backend.Services.Implementations
 {
@@ -50,7 +46,7 @@ namespace ReStore___backend.Services.Implementations
         {
             // Configure url and http client
             _httpClient = new HttpClient();
-            
+
             // Load configuration from INI file
             var parser = new FileIniDataParser();
             IniData data = parser.ReadFile("credentials.ini");
@@ -521,7 +517,7 @@ namespace ReStore___backend.Services.Implementations
                     var records = csv.GetRecords<InsightDTO>().ToList();
                     insightData.AddRange(records);
                 }
-        }
+            }
 
             // Convert the list to JSON and return
             return JsonConvert.SerializeObject(insightData);
@@ -531,14 +527,13 @@ namespace ReStore___backend.Services.Implementations
         {
             try
             {
-                using (var client = new HttpClient())
+                using (_httpClient)
                 {
-                    client.BaseAddress = new Uri("https://restore-dqh8c7h5cwe5huae.southeastasia-01.azurewebsites.net/");
-                    
+
                     // Send a GET request to the predict_demand endpoint
-                    HttpResponseMessage response = await client.GetAsync("predict_demand");
+                    HttpResponseMessage response = await _httpClient.GetAsync(_apiUrl + "/predict_demand");
                     response.EnsureSuccessStatusCode();
-                    
+
                     // Read the response content
                     var content = await response.Content.ReadAsStringAsync();
                     return content; // Return the JSON response as a string
@@ -559,10 +554,8 @@ namespace ReStore___backend.Services.Implementations
 
             try
             {
-                using (var client = new HttpClient())
+                using (_httpClient)
                 {
-                    client.BaseAddress = new Uri("https://restore-dqh8c7h5cwe5huae.southeastasia-01.azurewebsites.net/");
-
                     using (var form = new MultipartFormDataContent())
                     {
                         using (var fileStream = new FileStream(csvFile.FullName, FileMode.Open, FileAccess.Read))
@@ -572,7 +565,7 @@ namespace ReStore___backend.Services.Implementations
                             form.Add(streamContent, "file", csvFile.Name);
 
                             // Send the request to train the model
-                            HttpResponseMessage response = await client.PostAsync("train_model", form);
+                            HttpResponseMessage response = await _httpClient.PostAsync(_apiUrl + "/train_model", form);
                             response.EnsureSuccessStatusCode();
 
                             // Read the response content
@@ -619,10 +612,5 @@ namespace ReStore___backend.Services.Implementations
                 return $"Error during model training: {ex.Message}";
             }
         }
-
-<<<<<<< HEAD
-
-=======
     }
->>>>>>> d76db1ec61eab0357da55bf28babeb3173b58992
 }
