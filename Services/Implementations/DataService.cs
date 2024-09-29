@@ -190,14 +190,21 @@ namespace ReStore___backend.Services.Implementations
                         csv.WriteRecords(group);
                     }
 
-                    // Reset the position of the memory stream to the beginning
-                    memoryStream.Position = 0;
-
                     // Upload the CSV file to Cloud Storage
-                    await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
+                    using (var memoryStream = new MemoryStream(File.ReadAllBytes(tempFilePath)))
+                    {
+                        await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
+                    }
 
-                    memoryStream.Position = 0;
-                    //await TrainDemandModelEndpoint(memoryStream, username);
+                    // Train the demand model using the CSV file
+                    var csvFile = new FileInfo(tempFilePath);
+                    await TrainDemandModelEndpoint(csvFile, username);
+
+                    // Optionally delete the temporary file after processing
+                    if (File.Exists(tempFilePath))
+                    {
+                        File.Delete(tempFilePath);
+                    }
                 }
             }
         }

@@ -12,24 +12,25 @@ namespace ReStore___backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class TrainDemandController : ControllerBase
+    public class DemandPredictionController : ControllerBase
     {
         private readonly IDataService _dataService;
 
         // Constructor injection of IDataService
-        public TrainDemandController(IDataService dataService)
+        public DemandPredictionController(IDataService dataService)
         {
             _dataService = dataService;
         }
 
         // GET: api/insights/{username}
         [HttpGet("{username}")]
-        public async Task<IActionResult> TrainDemandModelEndpoint(FileInfo csvFile, string username)
+        public async Task<IActionResult> DemandPrediction(FileInfo csvFile, string username)
         {
-            var insightJson = await _dataService.TrainDemandModelEndpoint(csvFile,username);
+            // var insightJson = await _dataService.TrainDemandModelEndpoint(csvFile,username);
 
             // Return the JSON file of the insight
-            return Content(insightJson, "application/json");
+            // return Content(insightJson, "application/json");
+            return null;
         }
     }
 }
