@@ -15,6 +15,10 @@
     <PackageReference Include="ExcelDataReader" Version="3.7.0" />
     <PackageReference Include="Firebase.DotNet.Auth" Version="1.0.3" />
     <PackageReference Include="FirebaseAdmin" Version="3.0.1" />
+<<<<<<< HEAD
+=======
+    <PackageReference Include="Google.Cloud.AIPlatform.V1" Version="3.7.0" />
+>>>>>>> d76db1ec61eab0357da55bf28babeb3173b58992
     <PackageReference Include="Google.Cloud.Firestore" Version="3.8.0" />
     <PackageReference Include="Google.Cloud.Storage.V1" Version="4.10.0" />
     <PackageReference Include="ini-parser" Version="2.5.2" />

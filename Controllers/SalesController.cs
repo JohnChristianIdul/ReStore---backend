@@ -17,10 +17,13 @@ namespace ReStore___backend.Controllers
         }
 
         [HttpPost("upload/sales")]
-        public async Task<IActionResult> UploadSalesFile(IFormFile file, string username)
+        public async Task<IActionResult> UploadSalesFile(IFormFile file, [FromForm] string username)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file provided." });
+
+            if (string.IsNullOrEmpty(username))
+                return BadRequest(new { error = "Username is required." });
 
             try
             {
@@ -37,10 +40,30 @@ namespace ReStore___backend.Controllers
                     var records = csv.GetRecords<dynamic>().ToList();
 
                     // Call the service to process and upload the data
+                    Console.WriteLine($"{username}");
                     await _dataService.ProcessAndUploadDataSales(records, username);
 
                     return Ok(new { success = "Data processed and uploaded to Cloud Storage" });
                 }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
+            }
+        }
+
+        // GET method to retrieve sales data for a specific user
+        [HttpGet("sales/{username}")]
+        public async Task<IActionResult> GetSalesData(string username)
+        {
+            if (string.IsNullOrEmpty(username))
+                return BadRequest(new { error = "Username is required." });
+
+            try
+            {
+                // Call the service to get sales data
+                var salesDataJson = await _dataService.GetSalesDataFromStorageByUsername(username);
+                return Ok(new { data = salesDataJson });
             }
             catch (Exception ex)
             {

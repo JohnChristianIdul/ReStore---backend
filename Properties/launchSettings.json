@@ -34,7 +34,8 @@
       "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}/swagger",
       "environmentVariables": {
         "ASPNETCORE_HTTPS_PORTS": "8081",
-        "ASPNETCORE_HTTP_PORTS": "8080"
+        "ASPNETCORE_HTTP_PORTS": "8080",
+        "API_INSIGHT_URL": "https://restore-dqh8c7h5cwe5huae.southeastasia-01.azurewebsites.net"
       },
       "publishAllPorts": true,
       "useSSL": true
