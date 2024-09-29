@@ -17,6 +17,7 @@ using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore.V1;
 using System.IO.Pipes;
 using System.Security.AccessControl;
+using Newtonsoft.Json;
 
 namespace ReStore___backend.Services.Implementations
 {
@@ -220,14 +221,98 @@ namespace ReStore___backend.Services.Implementations
             }
         }
 
-        Task<string> IDataService.PredictDemandEndpoint()
+        public async Task<string> PredictDemandEndpoint()
         {
-            throw new NotImplementedException();
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    client.BaseAddress = new Uri("https://restore-dqh8c7h5cwe5huae.southeastasia-01.azurewebsites.net/");
+                    
+                    // Send a GET request to the predict_demand endpoint
+                    HttpResponseMessage response = await client.GetAsync("predict_demand");
+                    response.EnsureSuccessStatusCode();
+                    
+                    // Read the response content
+                    var content = await response.Content.ReadAsStringAsync();
+                    return content; // Return the JSON response as a string
+                }
+            }
+            catch (Exception ex)
+            {
+                return $"Error during demand prediction: {ex.Message}";
+            }
         }
 
-        Task<string> IDataService.TrainDemandModelEndpoint()
+        public async Task<string> TrainDemandModelEndpoint(FileInfo csvFile, string username)
         {
-            throw new NotImplementedException();
+            if (csvFile == null || !csvFile.Exists)
+            {
+                return "Invalid CSV file.";
+            }
+
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    client.BaseAddress = new Uri("https://restore-dqh8c7h5cwe5huae.southeastasia-01.azurewebsites.net/");
+
+                    using (var form = new MultipartFormDataContent())
+                    {
+                        using (var fileStream = new FileStream(csvFile.FullName, FileMode.Open, FileAccess.Read))
+                        {
+                            var streamContent = new StreamContent(fileStream);
+                            streamContent.Headers.ContentType = MediaTypeHeaderValue.Parse("text/csv");
+                            form.Add(streamContent, "file", csvFile.Name);
+
+                            // Send the request to train the model
+                            HttpResponseMessage response = await client.PostAsync("train_model", form);
+                            response.EnsureSuccessStatusCode();
+
+                            // Read the response content
+                            var content = await response.Content.ReadAsStringAsync();
+                            var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
+                            string resultMessage = jsonResponse.ContainsKey("message") ? jsonResponse["message"] : jsonResponse["error"];
+
+                            if (jsonResponse.ContainsKey("message"))
+                            {
+                                // Create a folder path for the Azure Blob Storage
+                                var folderPath = $"trained_models/{username}/";
+                                var modelFileName = "trained_model.pkl";
+                                var objectName = $"{folderPath}{modelFileName}";
+
+                                // Use a MemoryStream to save the model
+                                using (var memoryStream = new MemoryStream())
+                                {
+                                    // Read the model from a local file (assuming it's saved after training)
+                                    var modelFilePath = Path.Combine(Directory.GetCurrentDirectory(), modelFileName);
+                                    using (var modelFileStream = new FileStream(modelFilePath, FileMode.Open, FileAccess.Read))
+                                    {
+                                        await modelFileStream.CopyToAsync(memoryStream);
+                                    }
+
+                                    // Reset the position of the memory stream to the beginning
+                                    memoryStream.Position = 0;
+
+                                    // Upload the model to Azure Blob Storage using _storageClient
+                                    await _storageClient.UploadObjectAsync(_bucketName, objectName, null, memoryStream);
+                                }
+
+                                return $"Model training successful. Model uploaded to Azure Blob Storage: {objectName}";
+                            }
+                            else
+                            {
+                                return $"Model training failed: {resultMessage}";
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return $"Error during model training: {ex.Message}";
+            }
         }
-    }
+
+
 }
